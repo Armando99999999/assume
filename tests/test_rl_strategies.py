@@ -15,6 +15,7 @@ try:
     from assume.strategies.learning_strategies import (
         EnergyLearningSingleBidStrategy,
         EnergyLearningStrategy,
+        RenewableEnergyLearningSingleBidStrategy,
     )
 
 except ImportError:
@@ -60,6 +61,42 @@ def power_plant() -> PowerPlant:
         },
         fuel_type="lignite",
         emission_factor=0.5,
+        forecaster=ff,
+    )
+
+@pytest.fixture
+def mock_renewable_pp() -> PowerPlant:
+    # Create a renewable PowerPlant instance with some example parameters
+    index = pd.date_range("2023-06-30 22:00:00", periods=48, freq="h")
+    ff = PowerplantForecaster(
+        index,
+        fuel_prices={},
+        residual_load={"EOM": 0},
+    )
+    config = {
+        "unit_id": "test_renewable_pp",
+        "learning_config": LearningConfig(
+            algorithm="matd3",
+            learning_mode=True,
+            training_episodes=3,
+        ),
+    }
+    learning_role = Learning(config["learning_config"], start, end)
+
+    return PowerPlant(
+        id="test_renewable_pp",
+        unit_operator="test_operator",
+        technology="solar",
+        index=ff.index,
+        max_power=1000,
+        min_power=0,
+        efficiency=1,
+        additional_cost=1,  # to have different values than 0 in reward, profit, ...
+        bidding_strategies={
+            "EOM": EnergyLearningStrategy(learning_role=learning_role, **config)
+        },
+        fuel_type="renewable",
+        emission_factor=0,
         forecaster=ff,
     )
 
@@ -157,3 +194,95 @@ def test_learning_strategies_parametrized(
     assert profit == 10000.0
     assert regret == 0.0
     assert costs[0] == 40000.0  # Assumes hot_start_cost = 20000 by default
+
+@pytest.mark.require_learning
+@pytest.mark.parametrize(
+    "strategy_class, obs_dim, act_dim, unique_obs_dim, actor_architecture, expected_bid_count, expected_volumes",
+    [
+        (RenewableEnergyLearningSingleBidStrategy, 75, 1, 3, "mlp", 1, [1000]),
+    ],
+)
+def test_renewable_learning_strategy(
+    mock_market_config,
+    mock_renewable_pp,
+    strategy_class,
+    obs_dim,
+    act_dim,
+    unique_obs_dim,
+    actor_architecture,
+    expected_bid_count,
+    expected_volumes,
+):
+    product_index = pd.date_range("2023-07-01", periods=1, freq="h")
+    mc = mock_market_config
+    mc.product_type = "energy_eom"
+    product_tuples = [
+        (start, start + pd.Timedelta(hours=1), None) for start in product_index
+    ]
+    # Build LearningConfig dynamically
+    config = {
+        "unit_id": mock_renewable_pp.id,
+        "learning_config": LearningConfig(
+            algorithm="matd3",
+            actor_architecture=actor_architecture,
+            learning_mode=True,
+            training_episodes=3,
+        ),
+    }
+
+    learning_role = Learning(config["learning_config"], start, end)
+    # Override the strategy
+    mock_renewable_pp.bidding_strategies[mc.market_id] = strategy_class(
+        learning_role=learning_role, **config
+    )
+    strategy = mock_renewable_pp.bidding_strategies[mc.market_id]
+
+    # Check if observation dimension is set accordingly and follows current default structure
+    first_observation = strategy.create_observation(
+        mock_renewable_pp,
+        mc.market_id,
+        product_index[0],
+        product_index[0] + pd.Timedelta(hours=1),
+    )
+    assert len(first_observation) == obs_dim
+    assert (
+        strategy.unique_obs_dim + strategy.foresight * strategy.num_timeseries_obs_dim
+        == obs_dim
+    )
+
+    bids = strategy.calculate_bids(mock_renewable_pp, mc, product_tuples=product_tuples)
+
+    assert len(bids) == expected_bid_count
+    for bid, expected_volume in zip(bids, expected_volumes):
+        assert bid["volume"] == expected_volume
+
+    for order in bids:
+        order["accepted_price"] = 0
+        order["accepted_volume"] = order["volume"]
+
+    strategy.calculate_reward(mock_renewable_pp, mc, orderbook=bids)
+
+    # Fetch reward, profit, regret from learning_role cache instead of outputs
+    # Get the latest timestamp used for reward cache
+    learning_role = strategy.learning_role
+    reward_cache = learning_role.all_rewards
+    profit_cache = learning_role.all_profits
+    regret_cache = learning_role.all_regrets
+
+    # Use the last timestamp (should be the one just written)
+    last_ts = sorted(reward_cache.keys())[-1]
+    unit_id = (
+        mock_renewable_pp.id
+        if mock_renewable_pp.id in reward_cache[last_ts]
+        else list(reward_cache[last_ts].keys())[0]
+    )
+
+    reward = reward_cache[last_ts][unit_id][0]
+    profit = profit_cache[last_ts][unit_id][0]
+    regret = regret_cache[last_ts][unit_id][0]
+    costs = mock_renewable_pp.outputs["total_costs"].loc[product_index]
+
+    assert reward == -0.01
+    assert profit == -1000  # additional cost 1 in this example
+    assert regret == 0.0  # everything accepted
+    assert costs[0] == 1000.0  # additional cost of 1
