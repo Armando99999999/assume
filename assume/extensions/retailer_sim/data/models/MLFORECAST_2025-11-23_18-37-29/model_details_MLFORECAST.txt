@@ -1,0 +1,3 @@
+Test Info:
+Model Performance: {'MSE': 39230.06743070198, 'RMSE': 198.06581590648594, 'MAPE': 9.776349320733106, 'MSPE': 497964.1195067566, 'MAE': 131.57489025419255, 'R_2': -0.40122249410769206, 'sMAPE': 133.56709197764138}
+Launch Command Used:['--run_mode', 'train_test', '--dataset_path', './data/Dataset/df_nord.csv', '--date_format', '%Y-%m-%d %H:%M:%S', '--date_list', '2019-01-03 00:00:00', '2023-06-13 14:00:00', '2023-06-13 14:00:00', '2024-03-26 00:00:00', '--target_column', 'SBIL_MWH', '--model_type', 'MLFORECAST', '--model_name', 'LinearRegression', '--scaling', '--horizon', '96', '--forecast_type', 'ol-multi', '--data_freq', '15T', '--seasonal_period', '96', '--unscale_predictions', '--use_exog']

@@ -1,0 +1,3 @@
+,technology,unit_operator,node,simulation
+Retailer,retailer,Retailer_Op,node0,retailer_world
+TernaAgent,terna_balancing,Exchange_Op,node0,retailer_world

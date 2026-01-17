@@ -1,0 +1,179 @@
+# SPDX-FileCopyrightText: ASSUME Developers
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+# =============================================================================
+# CONFIG WALKTHROUGH (commenti sintetici per ogni blocco/parametro)
+# decision_making   -> strategia di bidding e preset MGP/MI.
+# market            -> forma e pendenze dei mercati sintetici, costi base.
+# simulation        -> intervallo temporale e mapping colonne dataset.
+# retailer_logic    -> leve operative, profili Terna/MSD, tariffa cliente.
+# macro_imbalance_* -> sorgente e guardrail del forecast macro sbilanciamento.
+# forecasting       -> opzioni baseline/ML per generare forecast di supporto.
+# information_flow  -> ritardi informativi (slot/ore) per prezzi e consumi.
+# =============================================================================
+
+decision_making:
+  # strategy_type sceglie la strategia: "simple" (heuristica) o "random" (baseline casuale).
+  #strategy_type: random
+  strategy_type: simple
+
+  random:
+    max_buy_volume_MWh: 800         # limite acquisti MGP per slot nella strategia random
+    max_sell_volume_MWh: 0        # limite vendite MGP per slot nella strategia random
+    max_intraday_volume_MWh: 100     # limite assoluto MI per slot nella strategia random
+    random_seed: 42                  # seme RNG per risultati ripetibili
+
+  simple:
+    profile: conservative                # preset coverage: conservative | balanced | aggressive
+    intraday_mode: aggressive        # preset MI: cautious | moderate | aggressive
+    macro_mode: opposite             # preset macro bias: off | balanced | opposite
+    cover_fraction: 1.2              # override opzionale della copertura target (moltiplica la domanda)
+    mi_shift_fraction: 0.2         # quota di domanda spostata su MI se MI più conveniente e macro non positivo
+    mi_correction_fraction: 0.2      # quota del residuo corretta in MI1
+    mi2_fraction: 0.2               # fattore MI2 rispetto a MI1 (moltiplica la correzione)
+    mi3_fraction: 0.2                # fattore MI3 rispetto a MI1 (moltiplica la correzione)
+    mi4_fraction: 0.1               # fattore MI4 rispetto a MI1 (moltiplica la correzione)
+    mi5_fraction: 0.1                # fattore MI5 rispetto a MI1 (moltiplica la correzione)
+    mi6_fraction: 0.1                # fattore MI6 rispetto a MI1 (moltiplica la correzione)
+    mi7_fraction: 0.1                # fattore MI7 rispetto a MI1 (moltiplica la correzione)
+    mi_price_signal_threshold: 0.0   # soglia % vs MGP per considerare MI conveniente (shift/resell)
+
+market:
+  transaction_cost_per_MWh: 4               # costo unitario per ordini MGP
+  transaction_cost_intraday_per_MWh: 4       # costo unitario per ordini MI
+  imbalance_penalty_cost_per_MWh: 10.0       # base per stimare prezzo MSD
+  global_capacity: 45000                     # capacità totale mercato sintetico
+  price_slope_scale: 1                    # scala la ripidità curve prezzo (MGP base 4/18, MI base 5/22)
+  price_slope_threshold: 0.1                 # quota capacità (0-1) oltre cui scatta la pendenza ripida
+  mgp:
+    volatility_EUR_MWh: 2                  # rumore prezzo MGP
+    capacity: 42000                          # capacità dedicata MGP
+  mi:
+    volatility_EUR_MWh: 5                # rumore prezzo MI
+    capacity: 30000                          # capacità dedicata MI
+
+simulation:
+  start_datetime: 2023-09-09 00:00:00        # inizio finestra simulazione
+  #nd_datetime: 2024-03-26 00:00:00          # fine finestra simulazione
+  end_datetime: 2023-09-11 00:00:00         # esempio di finestra corta per test
+  time_step_minutes: 60                      # granularità slot (minuti)
+  real_market: true                          # true = 7 sessioni MI reali, false = 2 sessioni compatte
+  retailer_name: Demo Retailer               # etichetta agente
+  # Mapping colonne dataset di input
+  timestamp_column: ORAINI
+  consumption_col: cluster_total_load_forecast_MW
+  actual_consumption_col: cluster_total_load_MW
+  mgp_price_col: price_MGP_EUR_MWh
+  mi_price_col: price_MI_EUR_MWh
+  imbalance_col: imbalance_forecast_MWh
+  macro_imbalance_col: SBIL_MWH
+  macrozone_price_col: price_macrozone_avg_EUR_MWh
+  imbalance_coeff_col: imbalance_coeff
+  mi2_price_col: price_MI_EUR_MWh
+  input_csv_path: assume/extensions/retailer_sim/outputs/ITALY_NORD_HOURLY_WITH_PODS_PUN.csv   # dataset principale
+  output_folder: assume/extensions/retailer_sim/outputs
+
+retailer_logic:
+  retailer_profile: balanced         # preset coverage/regolatori surplus (conservative | balanced | aggressive)
+  terna_profile: aggressive          # preset penali/bonus Terna-like (conservative | balanced | aggressive)
+  msd_profile: aggressive            # preset parametri MSD (conservative | balanced | aggressive)
+  imbalance_coeff_default: 0.4       # coefficiente sbilanciamento fallback se la colonna manca
+  max_imbalance_forecast_MWh: 0.1    # clip del forecast sbilanciamento per tagliare outlier
+  macrozone_price_window_hours: 6    # media mobile del macro price
+  mgp_sell_fraction: 0               # quota massima vendibile in MGP (0 = solo acquisti)
+  surplus_sale_fraction: 1.0         # quota di surplus venduta subito
+  surplus_sale_price: msd            # riferimento prezzo per surplus (mgp | mi | msd | custom | equilibrium)
+  customer_margin_EUR_MWh: 25.5      # margine unitario cliente
+  gme_balance_tolerance_MWh: 0.2     # soglia residuo sotto cui non si corregge in MI
+  align_tariff_with_standalone: false # true = tariffa purchase+margin anche nel world (confronto coerente)
+  # Override opzionali dei preset Terna/MSD: se non presenti si usano i valori del profilo.
+  terna_agent:
+    same_direction_penalty_EUR_MWh: 15    # penalità se lo sbilanciamento segue il macro-segno
+    opposite_direction_bonus_EUR_MWh: 15 # bonus se lo sbilanciamento è opposto al macro-segno
+    reference_volume_MWh: 1            # volume di riferimento per scalare penali/bonus
+    imbalance_pass_through_fraction: 0.5 # quota costo sbilanciamento ribaltata in tariffa (se align_tariff=false)
+  msd_settlement:
+    price_sensitivity: 0.1              # sensibilità prezzo MSD al delta MGP-macro
+    additional_penalty_EUR_MWh: 15.0      # penalità extra MSD
+    long_position_credit_factor: 0.1      # credito sulle posizioni lunghe
+
+macro_imbalance_forecast:
+  enabled: true                                   # abilita uso forecast macro sbilanciamento
+  source_column: imbalance_forecast_MWh           # colonna forecast macro (già rinominata dal loader)
+  band_mgp: 300.0                                 # ampiezza banda macro per MGP
+  band_mi: 120.0                                  # ampiezza banda macro per MI
+  leakage_guard:
+    forbid_real_macro_imbalance: true             # evita usare dati reali come forecast (no leakage)
+
+forecast_mapping:
+  load_actual_col: null                           # mapping opzionale serie reali per metriche
+  imbalance_actual_col: null
+  mgp_price_actual_col: MGP_PRICE_NORD
+  mi_price_actual_col: MI_PRICE_NORD
+  macrozone_price_actual_col: null
+  naive_lag_steps: 24                             # lag per forecast naive
+
+forecasting:
+  mode: advanced
+  baseline_lag_steps: 24
+  horizon_steps: 24
+  ml_model: XGBoost                    # se presente, usa il CSV con suffisso del modello se esiste
+  include_lstm: false
+  enable_model_optimization: true
+  output_csv: assume/extensions/retailer_sim/outputs/forecast_inputs.csv
+  advanced_settings:
+    target_columns:
+      load_cluster: cluster_total_load_MW
+      imbalance: SBIL_MWH
+    train_range:
+      - "2019-01-04 00:00:00"
+      - "2023-06-13 14:00:00"
+    validation_range:
+      - "2023-06-13 14:00:00"
+      - "2023-09-07 12:45:00"
+    test_range:
+      - "2023-09-07 12:45:00"
+      - "2024-03-26 00:00:00"
+    exogenous_columns:
+      - SBIL_MWH_lag1
+      - SBIL_MWH_lag4
+      - SBIL_MWH_lag96
+      - WIND_MWH
+      - THERMO_MWH
+      - SOLAR_MWH
+      - HYDRO_MWH
+      - GEO_MWH
+      - AUSTRIA_MWQH
+      - FRANCE_MWQH
+      - SLOVENIA_MWQH
+      - SWITZERLAND_MWQH
+      - SCHEDULED_INTERNAL_EXCHANGE_MW
+      - ACTUAL_TOTAL_LOAD_MW_NORD
+      - temperature_2m
+      - relative_humidity_2m
+      - wind_speed_10m
+      - cloud_cover
+      - shortwave_radiation
+      - precipitation
+      - hour
+      - day_of_week
+      - is_weekend
+      - day_of_year
+      - week_of_year
+      - month
+      - is_holiday
+      - is_bridge_day
+      - MGP_PRICE_NORD
+      - MI_PRICE_NORD
+
+information_flow:
+  consumption_delay_slots: 24         # ritardo (slot) per conoscere i consumi
+  imbalance_delay_slots: 6           # ritardo (slot) per conoscere sbilanciamento
+  mi_price_delay_hours: 4             # ritardo (ore) per disporre del prezzo MI
+  mi_session_delays_hours:
+    MI1: 4                            # ritardo apertura/copertura MI1
+    MI2: 4                            # ritardo apertura/copertura MI2
+  mgp_price_delay_hours: 0            # ritardo prezzo MGP
+  mgp_offer_day_offset: -1            # anticipo/offerta MGP rispetto al giorno di consegna
+  mgp_offer_deadline_hour: 14         # deadline oraria per offerte MGP
