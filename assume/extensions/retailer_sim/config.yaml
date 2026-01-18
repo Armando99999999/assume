@@ -15,17 +15,17 @@
 
 decision_making:
   # strategy_type sceglie la strategia: "simple" (heuristica) o "random" (baseline casuale).
-  #strategy_type: random
-  strategy_type: simple
+  strategy_type: random
+  #strategy_type: simple
 
   random:
-    max_buy_volume_MWh: 800         # limite acquisti MGP per slot nella strategia random
+    max_buy_volume_MWh: 0.8         # limite acquisti MGP per slot nella strategia random
     max_sell_volume_MWh: 0        # limite vendite MGP per slot nella strategia random
-    max_intraday_volume_MWh: 100     # limite assoluto MI per slot nella strategia random
+    max_intraday_volume_MWh: 0.001   # limite assoluto MI per slot nella strategia random
     random_seed: 42                  # seme RNG per risultati ripetibili
 
   simple:
-    profile: conservative                # preset coverage: conservative | balanced | aggressive
+    profile: balanced                # preset coverage: conservative | balanced | aggressive
     intraday_mode: aggressive        # preset MI: cautious | moderate | aggressive
     macro_mode: opposite             # preset macro bias: off | balanced | opposite
     cover_fraction: 1.2              # override opzionale della copertura target (moltiplica la domanda)
@@ -35,28 +35,28 @@ decision_making:
     mi3_fraction: 0.2                # fattore MI3 rispetto a MI1 (moltiplica la correzione)
     mi4_fraction: 0.1               # fattore MI4 rispetto a MI1 (moltiplica la correzione)
     mi5_fraction: 0.1                # fattore MI5 rispetto a MI1 (moltiplica la correzione)
-    mi6_fraction: 0.1                # fattore MI6 rispetto a MI1 (moltiplica la correzione)
+    mi6_fraction: 0.1                 # fattore MI6 rispetto a MI1 (moltiplica la correzione)
     mi7_fraction: 0.1                # fattore MI7 rispetto a MI1 (moltiplica la correzione)
-    mi_price_signal_threshold: 0.0   # soglia % vs MGP per considerare MI conveniente (shift/resell)
+    mi_price_signal_threshold: 0   # soglia % vs MGP per considerare MI conveniente (shift/resell)
 
 market:
-  transaction_cost_per_MWh: 4               # costo unitario per ordini MGP
-  transaction_cost_intraday_per_MWh: 4       # costo unitario per ordini MI
-  imbalance_penalty_cost_per_MWh: 10.0       # base per stimare prezzo MSD
+  transaction_cost_per_MWh: 8              # costo unitario per ordini MGP
+  transaction_cost_intraday_per_MWh: 8       # costo unitario per ordini MI
+  imbalance_penalty_cost_per_MWh: 25.0       # base per stimare prezzo MSD
   global_capacity: 45000                     # capacità totale mercato sintetico
   price_slope_scale: 1                    # scala la ripidità curve prezzo (MGP base 4/18, MI base 5/22)
-  price_slope_threshold: 0.1                 # quota capacità (0-1) oltre cui scatta la pendenza ripida
+  price_slope_threshold: 0.5                 # quota capacità (0-1) oltre cui scatta la pendenza ripida
   mgp:
-    volatility_EUR_MWh: 2                  # rumore prezzo MGP
+    volatility_EUR_MWh: 0                  # rumore prezzo MGP
     capacity: 42000                          # capacità dedicata MGP
   mi:
-    volatility_EUR_MWh: 5                # rumore prezzo MI
+    volatility_EUR_MWh: 2               # rumore prezzo MI
     capacity: 30000                          # capacità dedicata MI
 
 simulation:
   start_datetime: 2023-09-09 00:00:00        # inizio finestra simulazione
-  #nd_datetime: 2024-03-26 00:00:00          # fine finestra simulazione
-  end_datetime: 2023-09-11 00:00:00         # esempio di finestra corta per test
+  end_datetime: 2024-03-26 00:00:00          # fine finestra simulazione
+  #end_datetime: 2023-09-11 00:00:00         # esempio di finestra corta per test
   time_step_minutes: 60                      # granularità slot (minuti)
   real_market: true                          # true = 7 sessioni MI reali, false = 2 sessioni compatte
   retailer_name: Demo Retailer               # etichetta agente
@@ -79,30 +79,30 @@ retailer_logic:
   terna_profile: aggressive          # preset penali/bonus Terna-like (conservative | balanced | aggressive)
   msd_profile: aggressive            # preset parametri MSD (conservative | balanced | aggressive)
   imbalance_coeff_default: 0.4       # coefficiente sbilanciamento fallback se la colonna manca
-  max_imbalance_forecast_MWh: 0.1    # clip del forecast sbilanciamento per tagliare outlier
+  max_imbalance_forecast_MWh: 1000    # clip del forecast sbilanciamento per tagliare outlier
   macrozone_price_window_hours: 6    # media mobile del macro price
   mgp_sell_fraction: 0               # quota massima vendibile in MGP (0 = solo acquisti)
   surplus_sale_fraction: 1.0         # quota di surplus venduta subito
   surplus_sale_price: msd            # riferimento prezzo per surplus (mgp | mi | msd | custom | equilibrium)
-  customer_margin_EUR_MWh: 25.5      # margine unitario cliente
-  gme_balance_tolerance_MWh: 0.2     # soglia residuo sotto cui non si corregge in MI
+  customer_margin_EUR_MWh: 20      # margine unitario cliente
+  gme_balance_tolerance_MWh: 0.00002     # soglia residuo sotto cui non si corregge in MI
   align_tariff_with_standalone: false # true = tariffa purchase+margin anche nel world (confronto coerente)
   # Override opzionali dei preset Terna/MSD: se non presenti si usano i valori del profilo.
   terna_agent:
     same_direction_penalty_EUR_MWh: 15    # penalità se lo sbilanciamento segue il macro-segno
     opposite_direction_bonus_EUR_MWh: 15 # bonus se lo sbilanciamento è opposto al macro-segno
-    reference_volume_MWh: 1            # volume di riferimento per scalare penali/bonus
-    imbalance_pass_through_fraction: 0.5 # quota costo sbilanciamento ribaltata in tariffa (se align_tariff=false)
+    reference_volume_MWh: 0.1            # volume di riferimento per scalare penali/bonus
+    imbalance_pass_through_fraction: 0.3 # quota costo sbilanciamento ribaltata in tariffa (se align_tariff=false)
   msd_settlement:
-    price_sensitivity: 0.1              # sensibilità prezzo MSD al delta MGP-macro
-    additional_penalty_EUR_MWh: 15.0      # penalità extra MSD
-    long_position_credit_factor: 0.1      # credito sulle posizioni lunghe
+    price_sensitivity: 0.7              # sensibilità prezzo MSD al delta MGP-macro
+    additional_penalty_EUR_MWh: 25.0      # penalità extra MSD
+    long_position_credit_factor: 0.35      # credito sulle posizioni lunghe
 
 macro_imbalance_forecast:
   enabled: true                                   # abilita uso forecast macro sbilanciamento
   source_column: imbalance_forecast_MWh           # colonna forecast macro (già rinominata dal loader)
   band_mgp: 300.0                                 # ampiezza banda macro per MGP
-  band_mi: 120.0                                  # ampiezza banda macro per MI
+  band_mi: 300                                 # ampiezza banda macro per MI
   leakage_guard:
     forbid_real_macro_imbalance: true             # evita usare dati reali come forecast (no leakage)
 
@@ -115,10 +115,10 @@ forecast_mapping:
   naive_lag_steps: 24                             # lag per forecast naive
 
 forecasting:
-  mode: advanced
+  mode: baseline
   baseline_lag_steps: 24
   horizon_steps: 24
-  ml_model: XGBoost                    # se presente, usa il CSV con suffisso del modello se esiste
+  ml_model: XGBoost                  # se presente, usa il CSV con suffisso del modello se esiste
   include_lstm: false
   enable_model_optimization: true
   output_csv: assume/extensions/retailer_sim/outputs/forecast_inputs.csv
