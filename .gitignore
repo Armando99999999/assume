@@ -150,3 +150,5 @@ examples/notebooks/outputs
 *.pb
 *.jar
 fameSetup.yaml
+assume/extensions/retailer_sim/outputs/bgfgfn.png
+assume/extensions/retailer_sim/df_nord_h.csv
