@@ -292,14 +292,16 @@ Il plot usa `standalone/plot_dashboard.py` e supporta sia i risultati standalone
 python -m assume.extensions.retailer_sim.standalone.plot_dashboard
 
 # Standalone con percorsi espliciti
-python -m assume.extensions.retailer_sim.standalone.plot_dashboard \
-  --results assume/extensions/retailer_sim/outputs/hourly_results.csv \
-  --totals assume/extensions/retailer_sim/outputs/aggregated_totals.json \
-  --output assume/extensions/retailer_sim/outputs/dashboard.png
+python python -m assume.extensions.retailer_sim.standalone.plot_dashboard `
+      --config assume/extensions/retailer_sim/config.yaml `
+      --results assume/extensions/retailer_sim/outputs/hourly_results.csv `
+      --totals assume/extensions/retailer_sim/outputs/aggregated_totals.json `
+      --output assume/extensions/retailer_sim/outputs/dashboard.png
 
 # World adapter: punta alla cartella retailer_world
-python -m assume.extensions.retailer_sim.standalone.plot_dashboard \
-  --world-export assume/extensions/retailer_sim/outputs/retailer_world
+python -m assume.extensions.retailer_sim.standalone.plot_dashboard `
+>>   --world-export assume/extensions/retailer_sim/outputs/retailer_world `
+>>   --output assume/extensions/retailer_sim/outputs/world_dashboard.png
 ```
 
 Il comando per il World adapter usa `world_totals.json` se presente; in caso contrario, e' possibile passare `--totals`. Se `world_hourly_results.csv` non esiste, lo script lo ricostruisce a partire dagli export del World.
