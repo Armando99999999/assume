@@ -372,12 +372,5 @@ Per riprodurre una simulazione in modo coerente, e' consigliabile fissare e docu
 - parametri di sessione MI (real_market true/false);
 - parametri MSD e Terna-like che influenzano i costi.
 
-## Open questions / To confirm
 
-Questi punti non sono completamente chiariti dal codice e dovrebbero essere confermati con i maintainer:
-- **Unita' di misura**: molte colonne hanno suffisso `_MW` ma sono trattate come MWh per slot. Il codice non applica conversioni esplicite se non per la scrittura degli ordini. Confermare la convenzione attesa.
-- **Macro vs retailer imbalance**: nel World adapter `macro_imbalance_column` e' settata a `imbalance_forecast_MWh` in `world_simulation.py`. Confermare se macro e retailer sbilanciamento devono essere serie distinte.
-- **Leakage guard**: esiste `leakage_guard.py` e un blocco di config, ma non risulta integrato nel runtime. Confermare se si tratta di funzionalita' non ancora collegata.
-- **Versioni dei modelli**: file con suffisso *Copia*/*last* non sono spiegati. Confermare quale versione e' considerata "ufficiale" per la tesi.
-- **Predictors/ directory**: `retailer_forecasts.py` importa moduli da `assume/extensions/retailer_sim/Predictors`, ma nel repository corrente risultano presenti solo artefatti `__pycache__`. Verificare se i sorgenti mancano o risiedono altrove.
 
